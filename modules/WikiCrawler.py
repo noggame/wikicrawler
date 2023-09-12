@@ -7,33 +7,41 @@ import configparser
 from os import getcwd
 
 class WikiCrawler:
-    ### Configuration
-    available_tag = ["h1", "h2", "h3", "h4", "h5", "h6",
-                     "p", "ul", "ol"]
-    # available_tag = ["h1", "h2", "h3", "h4", "h5", "h6",
-    #                  "p", "ul", "ol", "table"]
-
-    ### Operations
+    
     def __init__(self) -> None:
         self._country_code = "ko"
         self._url = f"https://{self._country_code}.wikipedia.org/wiki"
 
-        # from Config file
+        ### Configuration (for config.ini)
         config = configparser.ConfigParser(allow_no_value=True)
         config.read(f"{getcwd()}/config.ini")
 
-        self._tag = {
-            "title" : f"{config.get('tag', 'title')}",
-            'list' : f"{config.get('tag', 'list')}"
+        self._identifier = {
+            'title' : f"{config.get('identifier', 'title')}",
+            'list' : f"{config.get('identifier', 'list')}",
+            'table' : f"{config.get('identifier', 'table')}",
+            'code' : f"{config.get('identifier', 'code')}"
         }
+        self._available_tag = [item.strip() for item in config.get('filter', 'available_tag').split(",")]
         self._unnecessary_title = [item.strip() for item in config.get('filter', 'unnecessary_title').split(",")]
 
+
+    ### Operations
     def _set_base_(self, country_code:str="ko"):
         """
         country_code = 위키 검색엔진 국가코드 입력
         """
         if not country_code:
             country_code = self._country_code
+
+
+    def get_raw(self, keyword:str) -> BeautifulSoup:
+
+        raw_data = requests.get(self._url+f"/{keyword}")
+        bs_data = BeautifulSoup(raw_data.content, "html.parser")
+
+        return bs_data
+    
 
     def _remove_meaningless_tag_(self, target:BeautifulSoup):
         """
@@ -51,14 +59,6 @@ class WikiCrawler:
         editSpanList = target.find_all(attrs={"class": "mw-editsection"})
         for editSpan in editSpanList:
             editSpan.decompose()
-
-
-    def get_raw(self, keyword:str) -> BeautifulSoup:
-
-        raw_data = requests.get(self._url+f"/{keyword}")
-        bs_data = BeautifulSoup(raw_data.content, "html.parser")
-
-        return bs_data
     
 
     def make_passage(self, keyword:str):
@@ -86,28 +86,31 @@ class WikiCrawler:
         for child in body_div.children:
             child:BeautifulSoup = child # type converting/check
 
+            dataQueue = []
+
+            # 예외적인 태그들 처리를 위해 dataQueue에 처리해야하는 대상들 선별/추가
+            if child.name == "meta":
+                for grandChild in child.children:
+                    if grandChild.name == "div":
+                        dataQueue.extend(grandChild.children)
+                    else:
+                        dataQueue.append(grandChild)
+            else:
+                dataQueue.append(child)
+
             # 태그별 분류&처리
-            if child.name in self.available_tag:
-                tag, text = self.extract_sentence(child)
+            for eachData in dataQueue:
+                eachData:BeautifulSoup = eachData
 
-                if not text:
-                    continue
+                if eachData.name in self._available_tag:
+                    tag, text = self.extract_sentence(eachData)
+                    if text:
+                        sentence = PM.DataType.Sentence(tag=tag, context=text)
+                        sentenceList.append(sentence)
 
-                sentence = PM.DataType.Sentence(tag=tag, context=text)
-                sentenceList.append(sentence)
-
-            elif child.name == "meta":
-                for grandChild in child:
-                    if grandChild.name in self.available_tag:
-                        tag, text = self.extract_sentence(grandChild)
-                        if text:
-                            sentence = PM.DataType.Sentence(tag=tag, context=text)
-                            sentenceList.append(sentence)
-
-        
         passageList = PM.make_passages_from_sentences(sentenceList=sentenceList)
-        # print(*passageList, sep="\n")
 
+        ### print
         for passage in passageList:
             passage:PM.DataType.Passage = passage
             print(f"[Title] {passage.title}")
@@ -115,12 +118,14 @@ class WikiCrawler:
             print(f"[Contents] {passage.contents}")
             print("-"*30)
 
+        return passageList
+
         ### post-processing
         # TODO 1. 불필요한 정보 필터링
         # TODO 2. sentence list 로부터 Passage 생성
 
 
-    def extract_sentence(self, target:BeautifulSoup, tag:bool=False):
+    def extract_sentence(self, source:BeautifulSoup, tag:bool=False):
         """
         입력 target 문장에 대한 태그 분석 뒤, 구분 태그명과 내용을 반환
 
@@ -138,17 +143,18 @@ class WikiCrawler:
         sentence = ""
 
         # 1) Hearder
-        if target.name in ["h1", "h2", "h3", "h4", "h5", "h6"]:
-            tag = PM.DataType.Tag.get_header_by_tagname(target.name)
-            sentence = target.get_text().strip()
+        if source.name in ["h1", "h2", "h3", "h4", "h5", "h6"]:
+            tag = PM.DataType.Tag.get_header_by_tagname(source.name)
+            tag_str = f"{self._identifier.get('title')}"*int(source.name[1])
+            sentence = f"{tag_str} {source.get_text().strip()}"
 
         # 2) List
-        elif target.name == "ul":
+        elif source.name == "ul":
             ul_text = ""
-            for li in target.children:
+            for li in source.children:
                 li:BeautifulSoup = li
                 if li.name == "li":
-                    ul_text += f"{li.get_text().strip()}\n"
+                    ul_text += f"{self._identifier.get('list')} {li.get_text().strip()}\n"
 
                     ### with '-' tag
                     # li_tag = f"{self.list_tag}"
@@ -158,12 +164,50 @@ class WikiCrawler:
             sentence = ul_text.strip()
 
         # 3) Table
+        # <tr> <th> <td> 순으로 처리
+        elif source.name == "table":
+            table_markdown = ""     # markdown format
 
+            ## table 중 class 속성값으로 wikitable을 가지는 테이블만 처리
+            if "wikitable" in source.get_attribute_list("class"):
+
+                # Table Row
+                for row in source.find_all(name="tr"):
+                    row:BeautifulSoup = row
+                    table_markdown += f"{self._identifier.get('table')}"
+
+                    # Table Head & Data
+                    thdList = []
+                    thdList.extend(row.find_all(name="th"))
+                    thdList.extend(row.find_all(name="td"))
+
+                    for col in thdList:
+                        col:BeautifulSoup = col
+                        for text_componet in col.children:
+                            if text_componet.name == "br":
+                                table_markdown += "<br/>"
+                            else:
+                                table_markdown += text_componet.get_text().replace("\n", "")
+                        table_markdown += f"{self._identifier.get('table')}"
+
+                    table_markdown += "\n"
+
+            tag = PM.DataType.Tag.TABLE
+            sentence = table_markdown.strip()
+
+        
+        # 4) Code
+        # <pre> 에 대한 처리
+        elif source.name == "pre":
+            code_divider = f"{self._identifier.get('code')}"*3
+            
+            tag = PM.DataType.Tag.CODE
+            sentence = f"{code_divider}\n{source.get_text().strip()}\n{code_divider}"
 
         # ETC) Others (~context, ~text)
         else:
             tag = PM.DataType.Tag.CONTEXT
-            sentence = target.get_text().strip()
+            sentence = source.get_text().strip()
 
         return tag, sentence
 

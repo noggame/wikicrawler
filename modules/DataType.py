@@ -11,6 +11,8 @@ class Tag(Enum):
     NONE = 0
     CONTEXT = 1
     LIST = 2
+    TABLE = 3
+    CODE = 4
     HEADER_1 = 11   # keyword
     HEADER_2 = 12   # Passage divider
     HEADER_3 = 13

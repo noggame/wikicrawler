@@ -4,7 +4,7 @@
 
 ```
 # Python 3.9.7
-pip install requests BeautifulSoup
+pip install requests bs4
 ```
 
 ### 실행

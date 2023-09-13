@@ -36,8 +36,8 @@ def make_passages_from_sentences(sentenceList:list):
             # Key Header (문서의 시작 Header)
             if not stackedPassage.title:
                 keyword = stackedPassage.title = curSentence.context
-                # stackedPassage.keyword = keyword  # 키워드 패시지에 키워드를 그대로 저장하려는 경우 사용 (self keywording)
-                
+                stackedPassage.keyword = keyword  # self keywording
+
             # Sub Passage (Key Header 이후의 Header)
             else:
                 # 현재까지 정보 저장 후 초기화
@@ -58,7 +58,6 @@ def make_passages_from_sentences(sentenceList:list):
 #     def add_passge(self, passage:DataType.Passage):
 #         self._passageList.append(passage)
 
-#     # TODO 구현필요
 #     def get_passage_by(self, tag:str):
 #         """
 #         tag명을 가지는 패시지만 반환 (순차))

@@ -13,24 +13,28 @@ class Tag(Enum):
     LIST = 2
     TABLE = 3
     CODE = 4
-    HEADER_1 = 11   # keyword
-    HEADER_2 = 12   # Passage divider
-    HEADER_3 = 13
-    HEADER_4 = 14
-    HEADER_5 = 15
-    HEADER_6 = 16
+    DESCRIPTION = 5
+    # Header
+    HEADER_BASE = 100
+    HEADER_1 = HEADER_BASE + 1   # keyword
+    HEADER_2 = HEADER_BASE + 2   # Passage divider
+    HEADER_3 = HEADER_BASE + 3
+    HEADER_4 = HEADER_BASE + 4
+    HEADER_5 = HEADER_BASE + 5
+    HEADER_6 = HEADER_BASE + 6
 
     def get_header_by_tagname(tagName:str):
         if tagName in ["h1", "h2", "h3", "h4", "h5", "h6"]:
-            return Tag(10+int(tagName[1]))
+            return Tag(Tag.HEADER_BASE.value+int(tagName[1]))
         else:
             logging.warning("not found header by tagName")
             return None
         
     def is_passage_header(tag:int):
         """
-        h1, h2 헤더인지 확인
+        passage 구분을 위해 사용되는 헤더인지 확인
 
+        ---
         ## Return
         h1, h2 tag인 경우 True 반환, 이 외의 경우에는 False 반환
         """
@@ -98,5 +102,10 @@ class Passage:
         self._keyword = keyword
 
     def __str__(self) -> str:
-        return f"(title:{self.title}, contents:{self.contents}, related:{self.keyword})"
+        printFormat = "-"*30
+        printFormat += f"\n[Title] {self.title}"
+        printFormat += f"\n[Keyword] {self.keyword}"
+        printFormat += f"\n[Contents] {self.contents}"
+        
+        return printFormat
     

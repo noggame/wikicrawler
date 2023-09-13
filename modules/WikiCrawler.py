@@ -16,6 +16,7 @@ class WikiCrawler:
         config = configparser.ConfigParser(allow_no_value=True)
         config.read(f"{getcwd()}/config.ini")
 
+        # TODO 설정파일(config.ini)의 값 json 으로 수정
         self._identifier = {
             'title' : f"{config.get('identifier', 'title')}",
             'list' : f"{config.get('identifier', 'list')}",
@@ -58,24 +59,34 @@ class WikiCrawler:
         # math -> alttext
 
         result = ""
+        margin = 2  # 재귀적으로 호출되는 경우 문장 앞 여백 크기
 
         # 하위 태그들 중 이미지/특수기호 등이 있다면, 해당 문자는 별도로 분리해 처리
         for tag in source.children:
             tag:BeautifulSoup = tag
 
-            if not tag.name:        # leaf node
+            # leaf node
+            if not tag.name:
                 result += tag.get_text().replace("\n", " ")
-            else:
-                ### TODO 재귀적 처리
-                
-                # 이미지가 존재하는 태그는 img내 alt 속성에 정의된 text를 추출해 사용, 이 외는 단순 text 출력
-                imageList = tag.find_all(name="img")
-                if imageList:
-                    result += "".join([img.attrs.get('alt') for img in imageList if img.has_attr("alt")])
-                else:
-                    result += tag.get_text().replace("\n", " ")
 
-        return result.strip()
+            # Recursion
+            elif tag.name in self._filter.get("available_tag"):
+                _tag, _sentence = self.get_sentence(tag)
+                sentence_with_margin = "".join([f"{' '*margin}{line}\n" for line in _sentence.split("\n")])
+                result += "\n" + sentence_with_margin
+
+            # image 확인 및 text 추출 (alt class로 부터 추출)
+            elif tag.find_all(name="img"):
+                imageList = tag.find_all(name="img")
+                result += "".join([img.attrs.get('alt') for img in imageList if img.has_attr("alt")])
+
+            # TODO math에 대한 정보 추출 (alttext class로 부터 추출)
+
+            # ETC
+            else:
+                result += tag.get_text().replace("\n", " ")
+
+        return result.rstrip()
     
 
     def _remove_meaningless_tag(self, target:BeautifulSoup, excludeTagList:list=[], excludeClassList:list=[]):
@@ -100,7 +111,7 @@ class WikiCrawler:
                 ec.decompose()
 
 
-    def extract_sentence(self, source:BeautifulSoup, tag_marking:bool=True):
+    def get_sentence(self, source:BeautifulSoup, tag_marking:bool=True):
         """
         입력 target 문장에 대한 태그 분석 뒤, 구분 태그명과 내용을 반환
 
@@ -114,10 +125,11 @@ class WikiCrawler:
         - tag : tag 이름
         - sentence : 해당 tag 뒤의 내용 (빈 내용의 경우 "" 반환)
         """
-        tag = ""
-        sentence = ""
 
-        ### Hearder
+        tag:PM.DataType.Tag = ""
+        sentence:str = ""
+
+        ### Hearder <h1> to <h6>
         if source.name in ["h1", "h2"]:
             tag = PM.DataType.Tag.get_header_by_tagname(source.name)
             sentence = f"{self.get_text(source)}"
@@ -127,7 +139,7 @@ class WikiCrawler:
             sentence = f"{tag_str}{self.get_text(source)}"
 
 
-        ### List
+        ### List <ul>
         elif source.name == "ul":
             ul_text = ""
             tag_str = f"{self._identifier.get('list')} "
@@ -140,7 +152,7 @@ class WikiCrawler:
             sentence = ul_text.strip()
 
 
-        ### List - Ordered
+        ### List - Ordered <ol>
         elif source.name == "ol":
             ol_text = ""
             numbering_idx = 1
@@ -167,16 +179,22 @@ class WikiCrawler:
                     for descItem in eachDesc:
                         descItem:BeautifulSoup = descItem
 
-                        # case 1) Text 와 태그가 연이어 나오는 경우에는 구분을 위해 개행문자가 들어가 있으나 실제로는 이어진 문장
-                        if not descItem.name:
-                            if descItem.next_sibling and descItem.next_sibling.name:
-                                description += descItem.get_text().strip()
-                            else:
-                                description += descItem.get_text() + "\n"
-                        # case 2) 패턴1 에서 인위적으로 개행문자를 삽입하려는 경우 br 태그가 사용됨
-                        elif descItem.name == "br":
+                        # # case 1) 개행문자를 인위적으로 삽입한 경우
+                        if descItem.name == "br":
                             description += "\n"
-                        # case 3) 태그 내부에 삽입된 Text
+
+                        # case 2) innerText 이후 다음 데이터와 구분을 위해 개행문자가 들어가 있는 경우
+                        elif not descItem.name:     # innerText
+                            ns = descItem.next_sibling
+                            if not ns:      # innerText == leaf node
+                                description += descItem.get_text().rstrip()
+                            elif ns.name:   # innerText -> tag
+                                if ns.get_text().strip():
+                                    description += descItem.get_text()
+                            else:           # innerText -> innerText
+                                description += descItem.get_text()
+
+                        # case 3) Tag 내부의 Text 추출
                         else:
                             description += self.get_text(descItem)
 
@@ -186,7 +204,7 @@ class WikiCrawler:
 
             tag = PM.DataType.Tag.DESCRIPTION
             tag_str = f"{self._identifier.get('description')}"*3 + "\n"
-            sentence = f"{tag_str}{description}{tag_str}" if tag_marking else description
+            sentence = f"{tag_str}{description}{tag_str}".rstrip() if tag_marking else description
 
 
         ### Table
@@ -242,9 +260,8 @@ class WikiCrawler:
         ### Code
         # <pre> 에 대한 처리
         elif source.name == "pre":
-            tag_str = f"{self._identifier.get('code')}"*3 + "\n"
-            
             tag = PM.DataType.Tag.CODE
+            tag_str = f"{self._identifier.get('code')}"*3 + "\n"
             sentence = f"{tag_str}{source.get_text().strip()}{tag_str}".strip()
 
         ### Others (~context, ~text)
@@ -257,7 +274,7 @@ class WikiCrawler:
 
 
 
-    def make_passage(self, keyword:str):
+    def get_passages(self, keyword:str):
         """
         입력된 keyword를 기반으로 wikipedia에서 검색하고, 해당 정보를 문단별로 Passage List 형태로 반환
 
@@ -296,7 +313,7 @@ class WikiCrawler:
                 eachData:BeautifulSoup = eachData
 
                 if eachData.name in self._filter.get("available_tag"):
-                    tag, text = self.extract_sentence(eachData)
+                    tag, text = self.get_sentence(eachData)
                     if text:
                         sentence = PM.DataType.Sentence(tag=tag, context=text)
                         sentenceList.append(sentence)

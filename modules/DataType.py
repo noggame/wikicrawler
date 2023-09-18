@@ -43,6 +43,24 @@ class Tag(Enum):
         # return True if (Tag.HEADER_1 <= tag and tag <= Tag.HEADER_6) else False
         return True if (tag == Tag.HEADER_1 or tag == Tag.HEADER_2) else False
     
+class Link:
+    def __init__(self, keyword:str="", url:str="") -> None:
+        self.__keyword = keyword
+        self.__url = url
+
+    @property
+    def keyword(self):
+        return self.__keyword
+    @property
+    def url(self):
+        return self.__url
+    @keyword.setter
+    def keyword(self, keyword):
+        self.__keyword = keyword
+    @url.setter
+    def url(self, url):
+        self.__url = url
+    
         
 class Sentence:
     def __init__(self, tag:Tag, context:str) -> None:

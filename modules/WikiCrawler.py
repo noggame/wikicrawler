@@ -6,6 +6,7 @@ import modules.PassageManager as PM
 import configparser
 from os import getcwd
 import pandas as pd
+import logging
 
 class WikiCrawler:
     
@@ -43,10 +44,44 @@ class WikiCrawler:
             country_code = self._country_code
 
 
-    def get_raw(self, keyword:str) -> BeautifulSoup:
+    def __remove_meaningless_tag(self, target:BeautifulSoup, excludeTagList:list=[], excludeClassList:list=[]):
+        """
+        불필요한 태그 삭제
+        """
+        ### 예외 태그 예시
+        # <sup> : [n] 형태의 각주
 
-        raw_data = requests.get(self._url+f"/{keyword}")
-        bs_data = BeautifulSoup(raw_data.content, "html.parser")
+        # exclude tag
+        for exTag in excludeTagList:
+            exTagList = target.find_all(name=exTag)
+            for et in exTagList:
+                et.decompose()
+
+        ### 예외 클래스 예시
+        # mw-editsection : "[편집]" 포맷의 링크 텍스트 제거
+        # mwe-math-mathml-a11y : 수학기호 이미지 제거
+        for exCls in excludeClassList:
+            exClsList = target.find_all(attrs={"class": exCls})
+            for ec in exClsList:
+                ec.decompose()
+
+
+    def get_raw(self, keyword:str="", url="") -> BeautifulSoup:
+        
+        if (keyword and url) or (not keyword and not url):
+            logging.warning("Only one param. should be defined from [keyword, url]")
+            return None
+        
+        bs_data = ""
+        if keyword:
+            raw_data = requests.get(self._url+f"/{keyword}")
+            bs_data = BeautifulSoup(raw_data.content, "html.parser")
+        elif url:
+            raw_data = requests.get(f"{url}")
+            bs_data = BeautifulSoup(raw_data.content, "html.parser")
+        else:
+            logging.error("Non-defined error occurs.")
+            return None
 
         return bs_data
     
@@ -59,10 +94,8 @@ class WikiCrawler:
         result = ""
         margin = 2  # 재귀적으로 호출되는 경우 문장 앞 여백 크기
 
-        # if source.name == "dd":
-        #     print("="*10)
-        #     print(source)
-        #     print("="*10)
+        if type(source) == str:
+            return str(source).strip()
 
         for src_child in source.children:
             # if source.name == "dd":
@@ -114,28 +147,6 @@ class WikiCrawler:
                 result += src_child.get_text()
 
         return result+"\n"
-    
-
-    def _remove_meaningless_tag(self, target:BeautifulSoup, excludeTagList:list=[], excludeClassList:list=[]):
-        """
-        불필요한 태그 삭제
-        """
-        ### 예외 태그 예시
-        # <sup> : [n] 형태의 각주
-
-        # exclude tag
-        for exTag in excludeTagList:
-            exTagList = target.find_all(name=exTag)
-            for et in exTagList:
-                et.decompose()
-
-        ### 예외 클래스 예시
-        # mw-editsection : "[편집]" 포맷의 링크 텍스트 제거
-        # mwe-math-mathml-a11y : 수학기호 이미지 제거
-        for exCls in excludeClassList:
-            exClsList = target.find_all(attrs={"class": exCls})
-            for ec in exClsList:
-                ec.decompose()
 
 
     def get_sentence(self, source:BeautifulSoup, tag_marking:bool=True):
@@ -333,7 +344,7 @@ class WikiCrawler:
 
 
 
-    def get_passages(self, keyword:str):
+    def get_passages_from(self, keyword:str="", url:str=""):
         """
         입력된 keyword를 기반으로 wikipedia에서 검색하고, 해당 정보를 문단별로 Passage List 형태로 반환
 
@@ -341,16 +352,22 @@ class WikiCrawler:
         keyword : str = 검색어
         """
 
-        sentence_keyword = PM.DataType.Sentence(tag=PM.DataType.Tag.HEADER_1, context=keyword)
-        sentenceList = [sentence_keyword]
-
         # get raw(html) data
-        bs_data:BeautifulSoup = self.get_raw(keyword=keyword)
+        bs_data:BeautifulSoup = self.get_raw(keyword=keyword, url=url)
+        if not bs_data:
+            logging.error("Wikipedia request error.")
+            return None
+
         main = bs_data.find(name="main")
         body_div = main.select_one("#mw-content-text > div.mw-parser-output")   # get body
 
+        # extract keyword
+        header_keyword = bs_data.find_all(attrs={"class": "mw-page-title-main"})[0].get_text().strip()
+        sentence_keyword = PM.DataType.Sentence(tag=PM.DataType.Tag.HEADER_1, context=header_keyword)
+        sentenceList = [sentence_keyword]
+
         # pre-processing : 처리가 불필요한 정보 제거
-        self._remove_meaningless_tag(body_div, excludeTagList=self._filter.get("exclude_tag"), excludeClassList=self._filter.get("exclude_class"))
+        self.__remove_meaningless_tag(body_div, excludeTagList=self._filter.get("exclude_tag"), excludeClassList=self._filter.get("exclude_class"))
 
         # body의 컨텐츠 순차 처리
         for child in body_div.children:

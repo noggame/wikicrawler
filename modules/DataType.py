@@ -14,6 +14,7 @@ class Tag(Enum):
     TABLE = 3
     CODE = 4
     DESCRIPTION = 5
+    LINK = 6
     # Header
     HEADER_BASE = 100
     HEADER_1 = HEADER_BASE + 1   # keyword

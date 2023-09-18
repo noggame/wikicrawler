@@ -63,26 +63,33 @@ class Link:
     
         
 class Sentence:
-    def __init__(self, tag:Tag, context:str) -> None:
-        self._tag = tag
-        self._context = context
+    def __init__(self, tag:Tag="", context:str="", links:list=[]) -> None:
+        self.__tag = tag
+        self.__context = context
+        self.__links = links
 
     # Getter/Setter
     @property
     def tag(self) -> Tag:
-        return self._tag
+        return self.__tag
     @property
     def context(self) -> str:
-        return self._context
+        return self.__context
+    @property
+    def links(self) -> list:
+        return self.__links
     @tag.setter
     def tag(self, tag:Tag):
-        self._tag = tag
+        self.__tag = tag
     @context.setter
     def context(self, context:str):
-        self._context = context
+        self.__context = context
+    @links.setter
+    def links(self, links:list):
+        self.__links = links
 
     def __str__(self) -> str:
-        return f"(tag:{self.tag.name}, context:{self.context})"
+        return f"(tag:{self.tag.name}, context:{self.context}), links:{self.links}"
     
 class Passage:
     """
@@ -95,36 +102,44 @@ class Passage:
     - keyword : str = 어떤 keyword 검색에서 추출된 passage인지 출처
     """
 
-    def __init__(self, title:str="", contents:str="", keyword:str="") -> None:
-        self._title = title
-        self._contents = contents
-        self._keyword = keyword
+    def __init__(self, title:str="", contents:str="", keyword:str="", links:list=[]) -> None:
+        self.__title = title
+        self.__contents = contents
+        self.__keyword = keyword
+        self.__links = links
 
     # Getter/Setter
     @property
     def title(self) -> str:
-        return self._title #if self._title else None
+        return self.__title #if self._title else None
     @property
     def contents(self) -> str:
-        return self._contents #if self._contents else None
+        return self.__contents #if self._contents else None
     @property
     def keyword(self) -> str:
-        return self._keyword #if self._keyword else None
+        return self.__keyword #if self._keyword else None
+    @property
+    def links(self) -> list:
+        return self.__links
     @title.setter
     def title(self, title):
-        self._title = title
+        self.__title = title
     @contents.setter
     def contents(self, contents):
-        self._contents = contents
+        self.__contents = contents
     @keyword.setter
     def keyword(self, keyword):
-        self._keyword = keyword
+        self.__keyword = keyword
+    @links.setter
+    def links(self, links:list):
+        self.__links = links
 
     def __str__(self) -> str:
         printFormat = "-"*30
         printFormat += f"\n[Title] {self.title}"
         printFormat += f"\n[Keyword] {self.keyword}"
         printFormat += f"\n[Contents]\n{self.contents}"
+        printFormat += f"\n[Links]\n{self.links}"
         
         return printFormat
     

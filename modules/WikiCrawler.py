@@ -11,8 +11,8 @@ import logging
 class WikiCrawler:
     
     def __init__(self) -> None:
-        self._country_code = "ko"
-        self._url = f"https://{self._country_code}.wikipedia.org/wiki"
+        self.__country_code = "ko"
+        self.__url = f"https://{self.__country_code}.wikipedia.org/wiki"
 
         ### Configuration (for config.ini)
         config = configparser.ConfigParser(allow_no_value=True)
@@ -35,13 +35,13 @@ class WikiCrawler:
         }
 
 
-    ### Operations
-    def _set_base_(self, country_code:str="ko"):
-        """
-        country_code = 위키 검색엔진 국가코드 입력
-        """
-        if not country_code:
-            country_code = self._country_code
+    ### Attributes
+    @property
+    def country_code(self):
+        return self.__country_code
+    @country_code.setter
+    def country_code(self, country_code):
+        self.__country_code = country_code
 
 
     def __remove_meaningless_tag(self, target:BeautifulSoup, excludeTagList:list=[], excludeClassList:list=[]):
@@ -74,7 +74,7 @@ class WikiCrawler:
         
         bs_data = ""
         if keyword:
-            raw_data = requests.get(self._url+f"/{keyword}")
+            raw_data = requests.get(self.__url+f"/{keyword}")
             bs_data = BeautifulSoup(raw_data.content, "html.parser")
         elif url:
             raw_data = requests.get(f"{url}")

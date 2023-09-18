@@ -8,6 +8,7 @@ class DataType:
     Passage = DT.Passage
     Sentence = DT.Sentence
     Tag = DT.Tag
+    Link = DT.Link
 
 
 def make_passages_from_sentences(sentenceList:list):
@@ -31,21 +32,23 @@ def make_passages_from_sentences(sentenceList:list):
     for curSentence in sentenceList:
         curSentence:DataType.Sentence = curSentence
 
-        # check Header
+        # Header 데이터 (Passage 구분자)
         if DataType.Tag.is_passage_header(curSentence.tag):
-            # Key Header (문서의 시작 Header)
-            if not stackedSentence.title:
+            if not stackedSentence.title:       # Keyword Header (문서에서 처음 나오는 Header)
                 keyword = stackedSentence.title = curSentence.context
-                stackedSentence.keyword = keyword  # self keywording
-
-            # Sub Passage (Key Header 이후의 Header)
-            else:
-                # 현재까지 정보 저장 후 초기화
+                stackedSentence.keyword = keyword       # (self keywording)
+            
+            else:                               # Sub Header (Key Header 이후의 Header) >> 현재까지 정보 저장 후 초기화
                 stackedSentence.contents = stackedSentence.contents.strip()
                 passageList.append(stackedSentence)
-                stackedSentence = DataType.Passage(title=curSentence.context, keyword=keyword)
+                
+                stackedSentence = DataType.Passage(title=curSentence.context, keyword=keyword, links=[])  # init.
+
+        # 이 외의 데이터
         else:
             stackedSentence.contents += curSentence.context
+            stackedSentence.links.extend(curSentence.links)
+
     else:
         # 마지막 Passage 추가
         stackedSentence.contents = stackedSentence.contents.strip()

@@ -60,6 +60,9 @@ class Link:
     @url.setter
     def url(self, url):
         self.__url = url
+
+    def __str__(self) -> str:
+        return f"(keyword:{self.keyword}, url:{self.url})"
     
         
 class Sentence:
@@ -139,7 +142,10 @@ class Passage:
         printFormat += f"\n[Title] {self.title}"
         printFormat += f"\n[Keyword] {self.keyword}"
         printFormat += f"\n[Contents]\n{self.contents}"
-        printFormat += f"\n[Links]\n{self.links}"
+        printFormat += f"\n[Links]\n"
+
+        for link in self.links:
+            printFormat += f"{link}\n"
         
         return printFormat
     

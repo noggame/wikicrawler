@@ -7,6 +7,7 @@
 - 전체 포맷에 대한 개행문자 처리 수정 (개행문자 삽입 단일화 구조로 수정)
 - Table, Description, Code 처리 수정
 - CSV (using Pandas) 저장 method 추가
+- Link Class 생성 및 적용 (to Sentence & Passage Class)
 
 [09/13]
 - Table, List, Description 적용 (Table의 경우 보완 필요)

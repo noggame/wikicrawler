@@ -131,8 +131,12 @@ class WikiCrawler:
 
             # case 3) 추가 처리가 필요한 태그 - Recursion
             elif src_child.name in self._filter.get("available_tag"):
-                _tag, _sentence = self.get_sentence(src_child)
-                sentence_with_margin = "".join([f"{' '*margin}{line}\n" for line in _sentence.split("\n") if line]) # append margin to each line
+                ### deprecated
+                # _tag, _sentence = self.get_sentence(src_child)
+                # sentence_with_margin = "".join([f"{' '*margin}{line}\n" for line in _sentence.split("\n") if line]) # append margin to each line
+                ###
+                _sentence:PM.DataType.Sentence = self.get_sentence(source=src_child)
+                sentence_with_margin = "".join([f"{' '*margin}{line}\n" for line in _sentence.context.split("\n") if line]) # append margin to each line
                 result += f"\n{sentence_with_margin.rstrip()}"
 
 
@@ -149,32 +153,81 @@ class WikiCrawler:
         return result+"\n"
 
 
-    def get_sentence(self, source:BeautifulSoup, tag_marking:bool=True):
+    def get_links(self, source:BeautifulSoup) -> list:
         """
-        입력 target 문장에 대한 태그 분석 뒤, 구분 태그명과 내용을 반환
+        입력 source 에서 link 목록 추출 후 Link 객체로 변환 후 전체 목록 반환
 
         ---
         ## Parameter
-        - target:bs = html raw data
-        - tag:bool = 각 문장의 접두어(태그) 삽입여부
+        - source:BeaurifulSoup = html raw data
+
         ---
         ## Return
-        tuple(tag, sentence)
+        List of Link object
+
+        ### Link object is consist of
         - tag : tag 이름
         - sentence : 해당 tag 뒤의 내용 (빈 내용의 경우 "" 반환)
+        - links : [List of Link object]
+        """
+        
+        linkList = []
+        
+        linkSourceList = source.find_all(name="a")
+        for linkSource in linkSourceList:
+            linkSource:BeautifulSoup = linkSource
+            
+            keyword = linkSource.get_text(strip=True)
+            url = linkSource.get("href") or []
+
+            if keyword and url:
+                linkObj = PM.DataType.Link(keyword=keyword, url=url)
+                linkList.append(linkObj)
+
+        return linkList
+
+
+    def get_sentence(self, source:BeautifulSoup, tag_marking:bool=True):
+        """
+        입력 source 에 대한 태그 분석 뒤, 구분 태그명과 내용을 반환
+
+        ---
+        ## Parameter
+        - source:BeaurifulSoup = html raw data
+        - tag_marking:bool = 각 문장의 접두어(태그) 삽입여부
+
+        ---
+        ## Return
+        Sentence
+
+        ### Sentence object is consist of
+        - tag : tag 이름
+        - context : 해당 tag 뒤의 내용 (빈 내용의 경우 "" 반환)
+        - links : [List of Link object]
         """
 
-        tag:PM.DataType.Tag = ""
-        sentence:str = ""
+        tag:PM.DataType.Tag = None
+        sentence:PM.DataType.Sentence = None
+
+        # TODO Links 데이터 추출하는 함수 정의 및 적용
+        # TODO Sentence 반환
+
 
         ### Hearder <h1> to <h6>
         if source.name in ["h1", "h2"]:
             tag = PM.DataType.Tag.get_header_by_tagname(source.name)
-            sentence = f"{self.get_text(source).strip()}"
+            context = f"{self.get_text(source).strip()}"
+            links = self.get_links(source=source)
+
+            sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
+
         elif source.name in ["h3", "h4", "h5", "h6"]:
             tag = PM.DataType.Tag.get_header_by_tagname(source.name)
             tag_str = f"{self._identifier.get('title')}"*int(source.name[1])+" " if tag_marking else ""
-            sentence = f"{tag_str}{self.get_text(source).strip()}\n"
+            context = f"{tag_str}{self.get_text(source).strip()}\n"
+            links = self.get_links(source=source)
+
+            sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
 
 
         ### List <ul>
@@ -187,7 +240,10 @@ class WikiCrawler:
                     ul_text += f"{tag_str}{self.get_text(li)}"
 
             tag = PM.DataType.Tag.LIST
-            sentence = ul_text
+            context = ul_text
+            links = self.get_links(source=source)
+
+            sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
 
 
         ### List - Ordered <ol>
@@ -201,7 +257,10 @@ class WikiCrawler:
                     numbering_idx += 1
 
             tag = PM.DataType.Tag.LIST
-            sentence = ol_text
+            context = ol_text
+            links = self.get_links(source=source)
+
+            sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
 
 
         ### Description List
@@ -221,7 +280,10 @@ class WikiCrawler:
 
             tag = PM.DataType.Tag.DESCRIPTION
             tag_str = f"{self._identifier.get('description')}"*3 + "\n"
-            sentence = f"{tag_str}{description}{tag_str}" if tag_marking else description
+            context = f"{tag_str}{description}{tag_str}" if tag_marking else description
+            links = self.get_links(source=source)
+
+            sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
 
 
         ### Table
@@ -281,7 +343,10 @@ class WikiCrawler:
                 table_markdown += "\n"  # end of each row
 
             tag = PM.DataType.Tag.TABLE
-            sentence = table_markdown.strip()
+            context = table_markdown.strip()
+            links = self.get_links(source=source)
+
+            sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
 
 
         ### Blockquote
@@ -294,54 +359,21 @@ class WikiCrawler:
         elif source.name == "pre":
             tag = PM.DataType.Tag.CODE
             tag_str = f"{self._identifier.get('code')}"*3 + "\n"
-            sentence = f"{tag_str}{source.get_text().strip()}{tag_str}".strip()
+            context = f"{tag_str}{source.get_text().strip()}{tag_str}".strip()
+            links = self.get_links(source=source)
 
+            sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
 
-        ### TODO 수식 처리
-        # 아래 중 특정 형태가 수식에 대해서 나오는지 확인
-        # <span class="mwe-math-element">
-        # ㄴ <span class="mwe-math-mathml-inline mwe-math-mathml-a11y">
-        # <img class="mwe-math-fallback-image-inline">
-        # <math> 태그 확인 https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mrow
-
-        ### text <p>
-        # <p> 태그 내부 요소들을 쪼개서 출력
-        # elif source.name == "p":
-        #     p_text = ""
-        #     for p_child in source.children:
-        #         ns = p_child.next_sibling
-
-        #         # case 1) 개행문자를 인위적으로 삽입한 경우
-        #         if p_child.name == "br":
-        #             p_text += "<br>"
-        #         # case 2) innerText 이후 다음 데이터와 구분을 위해 개행문자가 들어가 있는 경우
-        #         elif not p_child.name:    # innerText
-                    
-        #             if not p_child.get_text():    # empty context
-        #                 continue
-
-        #             if not ns:      # innerText == leaf node
-        #                 p_text += p_child.get_text().rstrip()
-        #             elif ns.name:   # innerText -> tag
-        #                 if ns.get_text().strip():
-        #                     p_text += p_child.get_text()
-        #             else:           # innerText -> innerText
-        #                 p_text += p_child.get_text()
-        #         # case 3) Tag 내부의 Text 추출
-        #         else:
-        #             p_text += self.get_text(p_child)
-
-        #     tag = PM.DataType.Tag.CONTEXT
-        #     sentence = p_text.strip()
 
         ### Others (~context, ~text)
         else:
             tag = PM.DataType.Tag.CONTEXT
-            sentence = self.get_text(source=source)
+            context = self.get_text(source=source)
+            links = self.get_links(source=source)
 
-        return tag, sentence
+            sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
 
-
+        return sentence
 
 
     def get_passages_from(self, keyword:str="", url:str=""):
@@ -363,7 +395,7 @@ class WikiCrawler:
 
         # extract keyword
         header_keyword = bs_data.find_all(attrs={"class": "mw-page-title-main"})[0].get_text().strip()
-        sentence_keyword = PM.DataType.Sentence(tag=PM.DataType.Tag.HEADER_1, context=header_keyword)
+        sentence_keyword = PM.DataType.Sentence(tag=PM.DataType.Tag.HEADER_1, context=header_keyword, links=[])
         sentenceList = [sentence_keyword]
 
         # pre-processing : 처리가 불필요한 정보 제거
@@ -389,9 +421,9 @@ class WikiCrawler:
                 eachData:BeautifulSoup = eachData
 
                 if eachData.name in self._filter.get("available_tag"):
-                    tag, text = self.get_sentence(eachData)
-                    if text:
-                        sentence = PM.DataType.Sentence(tag=tag, context=text)
+                    sentence:PM.DataType.Sentence = self.get_sentence(eachData)
+
+                    if sentence.context:
                         sentenceList.append(sentence)
 
         passageList = PM.make_passages_from_sentences(sentenceList=sentenceList)
@@ -415,9 +447,10 @@ class WikiCrawler:
             keyword = passage.keyword or ""
             title = passage.title or ""
             contents = passage.contents or ""
+            links = "\n".join([f"{link.keyword}({link.url})" for link in passage.links])
 
-            outputDataFrame.append([keyword, title, contents])
+            outputDataFrame.append([keyword, title, contents, links])
 
-        storeDataFrame = pd.DataFrame(data=outputDataFrame, columns=["keyword", "title", "contents"])
+        storeDataFrame = pd.DataFrame(data=outputDataFrame, columns=["keyword", "title", "contents", "links"])
         storeDataFrame.to_csv(filepath)
         

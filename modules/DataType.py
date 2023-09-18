@@ -105,7 +105,7 @@ class Passage:
         printFormat = "-"*30
         printFormat += f"\n[Title] {self.title}"
         printFormat += f"\n[Keyword] {self.keyword}"
-        printFormat += f"\n[Contents] {self.contents}"
+        printFormat += f"\n[Contents]\n{self.contents}"
         
         return printFormat
     

@@ -3,6 +3,11 @@
 - 관련 데이터 링크정보 저장/관리 (연관검색 키워드로 사용 예정)
 
 # Update 내역
+[09/18]
+- 전체 포맷에 대한 개행문자 처리 수정 (개행문자 삽입 단일화 구조로 수정)
+- Table, Description, Code 처리 수정
+- CSV (using Pandas) 저장 method 추가
+
 [09/13]
 - Table, List, Description 적용 (Table의 경우 보완 필요)
 - 각주, 외부 링크 등 불필요한 Passage 필터링 적용

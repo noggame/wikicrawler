@@ -5,6 +5,7 @@ import modules.PassageManager as PM
 # for configuration
 import configparser
 from os import getcwd
+import pandas as pd
 
 class WikiCrawler:
     
@@ -50,43 +51,69 @@ class WikiCrawler:
         return bs_data
     
 
-    def get_text(self, source:BeautifulSoup) -> str:
+    def get_text(self, source:BeautifulSoup, newline_tag:bool=False) -> str:
         """
         입력된 source (html) 데이터로부터 기존 텍스트와 함께 이미지 및 수식 등을 텍스트 정보로 정제해 반환한다.
         """
 
-        # img -> alt
-        # math -> alttext
-
         result = ""
         margin = 2  # 재귀적으로 호출되는 경우 문장 앞 여백 크기
 
-        # 하위 태그들 중 이미지/특수기호 등이 있다면, 해당 문자는 별도로 분리해 처리
-        for tag in source.children:
-            tag:BeautifulSoup = tag
+        # if source.name == "dd":
+        #     print("="*10)
+        #     print(source)
+        #     print("="*10)
 
-            # leaf node
-            if not tag.name:
-                result += tag.get_text().replace("\n", " ")
+        for src_child in source.children:
+            # if source.name == "dd":
+            #     print(f">>> {src_child}")
 
-            # Recursion
-            elif tag.name in self._filter.get("available_tag"):
-                _tag, _sentence = self.get_sentence(tag)
-                sentence_with_margin = "".join([f"{' '*margin}{line}\n" for line in _sentence.split("\n")])
-                result += "\n" + sentence_with_margin
 
-            # image 확인 및 text 추출 (alt class로 부터 추출)
-            elif tag.find_all(name="img"):
-                imageList = tag.find_all(name="img")
-                result += "".join([img.attrs.get('alt') for img in imageList if img.has_attr("alt")])
+            src_child:BeautifulSoup = src_child
+            next_child:BeautifulSoup = src_child.next_sibling
 
-            # TODO math에 대한 정보 추출 (alttext class로 부터 추출)
 
-            # ETC
+            # case 1) innerText (태그없이 텍스트만 있는 데이터, ~leaf node)
+            if not src_child.name:
+
+                if not src_child.get_text(strip=True):  # empty context
+                    continue
+
+                if not next_child:                      # innerText && leaf node
+                    result += src_child.get_text().replace("\n", "")
+
+                elif next_child.name:                   # innerText -> tag
+                    result += src_child.get_text().replace("\n", "")
+
+                    # if next_child.get_text().rstrip():
+                    #     result += src_child.get_text().replace("\n", "")    # FIXME print
+                else:                                   # innerText -> innerText
+                    result += src_child.get_text().replace("\n", " ")   # FIXME print
+
+
+            # case 2) 개행문자
+            elif src_child.name == "br":
+                result += "<br/>" if newline_tag else "\n"
+
+
+            # case 3) 추가 처리가 필요한 태그 - Recursion
+            elif src_child.name in self._filter.get("available_tag"):
+                _tag, _sentence = self.get_sentence(src_child)
+                sentence_with_margin = "".join([f"{' '*margin}{line}\n" for line in _sentence.split("\n") if line]) # append margin to each line
+                result += f"\n{sentence_with_margin.rstrip()}"
+
+
+            # etc) 수식 확인 및 alttext 추출
+            elif src_child.find_all(name="math"):
+                mathList = src_child.find_all(name="math")
+                result += "".join([math_text.attrs.get('alttext') for math_text in mathList if math_text.has_attr("alttext")]).replace("\displaystyle ", "")
+
+
+            # not defined
             else:
-                result += tag.get_text().replace("\n", " ")
+                result += src_child.get_text()
 
-        return result.rstrip()
+        return result+"\n"
     
 
     def _remove_meaningless_tag(self, target:BeautifulSoup, excludeTagList:list=[], excludeClassList:list=[]):
@@ -132,11 +159,11 @@ class WikiCrawler:
         ### Hearder <h1> to <h6>
         if source.name in ["h1", "h2"]:
             tag = PM.DataType.Tag.get_header_by_tagname(source.name)
-            sentence = f"{self.get_text(source)}"
+            sentence = f"{self.get_text(source).strip()}"
         elif source.name in ["h3", "h4", "h5", "h6"]:
             tag = PM.DataType.Tag.get_header_by_tagname(source.name)
             tag_str = f"{self._identifier.get('title')}"*int(source.name[1])+" " if tag_marking else ""
-            sentence = f"{tag_str}{self.get_text(source)}"
+            sentence = f"{tag_str}{self.get_text(source).strip()}\n"
 
 
         ### List <ul>
@@ -146,10 +173,10 @@ class WikiCrawler:
             for li in source.children:
                 li:BeautifulSoup = li
                 if li.name == "li":
-                    ul_text += f"{tag_str}{self.get_text(li)}\n"
+                    ul_text += f"{tag_str}{self.get_text(li)}"
 
             tag = PM.DataType.Tag.LIST
-            sentence = ul_text.strip()
+            sentence = ul_text
 
 
         ### List - Ordered <ol>
@@ -159,11 +186,11 @@ class WikiCrawler:
             for li in source.children:
                 li:BeautifulSoup = li
                 if li.name == "li":
-                    ol_text += f"{numbering_idx}. {self.get_text(li)}\n" if tag_marking else f"{self.get_text(li)}\n"
+                    ol_text += f"{numbering_idx}. {self.get_text(li)}" if tag_marking else f"{self.get_text(li)}"
                     numbering_idx += 1
 
             tag = PM.DataType.Tag.LIST
-            sentence = ol_text.strip()
+            sentence = ol_text
 
 
         ### Description List
@@ -176,35 +203,14 @@ class WikiCrawler:
                 eachDesc:BeautifulSoup = eachDesc
 
                 if eachDesc.name in ["dt", "dd"]:
-                    for descItem in eachDesc:
-                        descItem:BeautifulSoup = descItem
-
-                        # # case 1) 개행문자를 인위적으로 삽입한 경우
-                        if descItem.name == "br":
-                            description += "\n"
-
-                        # case 2) innerText 이후 다음 데이터와 구분을 위해 개행문자가 들어가 있는 경우
-                        elif not descItem.name:     # innerText
-                            ns = descItem.next_sibling
-                            if not ns:      # innerText == leaf node
-                                description += descItem.get_text().rstrip()
-                            elif ns.name:   # innerText -> tag
-                                if ns.get_text().strip():
-                                    description += descItem.get_text()
-                            else:           # innerText -> innerText
-                                description += descItem.get_text()
-
-                        # case 3) Tag 내부의 Text 추출
-                        else:
-                            description += self.get_text(descItem)
-
+                    description += self.get_text(eachDesc)
                 else:
                     description += self.get_text(description)
-                description += "\n"
+                # description += "\n"
 
             tag = PM.DataType.Tag.DESCRIPTION
             tag_str = f"{self._identifier.get('description')}"*3 + "\n"
-            sentence = f"{tag_str}{description}{tag_str}".rstrip() if tag_marking else description
+            sentence = f"{tag_str}{description}{tag_str}" if tag_marking else description
 
 
         ### Table
@@ -213,8 +219,12 @@ class WikiCrawler:
             table_markdown = ""     # markdown format
             tag_table_divider = f"{self._identifier.get('table')}"
 
+            ### table 중 class 속성값으로 wikitable을 가지는 테이블만 처리
+            # if "wikitable" not in source.get_attribute_list("class"):
+            #   continue
+            ###
+
             # Table Row
-            # if "wikitable" in source.get_attribute_list("class"):     # table 중 class 속성값으로 wikitable을 가지는 테이블만 처리
             for row in source.find_all(name="tr"):
                 row:BeautifulSoup = row
                 table_markdown += f"{tag_table_divider}"
@@ -227,26 +237,33 @@ class WikiCrawler:
                 for col in descList:
                     col:BeautifulSoup = col
                     for col_child in col.children:
-                        # case 1) 개행문자를 인위적으로 삽입한 경우
-                        if col_child.name == "br":
-                            table_markdown += "<br/>"
-                        # case 2) innerText 이후 다음 데이터와 구분을 위해 개행문자가 들어가 있는 경우
-                        elif not col_child.name:    # innerText
+                        ns = col_child.next_sibling
+
+                        # case 1) innerText 이후 다음 데이터와 구분을 위해 개행문자가 들어가 있는 경우
+                        if not col_child.name:    # innerText
                             
-                            if not col_child.get_text():    # empty context
+                            if not col_child.get_text(strip=True):      # empty context
                                 continue
 
-                            ns = col_child.next_sibling
-                            if not ns:      # innerText == leaf node
-                                table_markdown += col_child.get_text().rstrip()
-                            elif ns.name:   # innerText -> tag
-                                if ns.get_text().strip():
-                                    table_markdown += col_child.get_text()
-                            else:           # innerText -> innerText
-                                table_markdown += col_child.get_text()
+                            # innerText && leaf node
+                            if not ns:
+                                table_markdown += col_child.get_text().replace("\n", "")
+                            # innerText -> tag
+                            elif ns.name:
+                                table_markdown += col_child.get_text().replace("\n", "")
+                            # innerText -> innerText
+                            else:
+                                table_markdown += col_child.get_text().replace("\n", " ")
+
+
+                        # case 2) 개행문자를 인위적으로 삽입한 경우
+                        elif col_child.name == "br":
+                            table_markdown += "<br>"
+
+
                         # case 3) Tag 내부의 Text 추출
                         else:
-                            table_markdown += self.get_text(col_child)
+                            table_markdown += self.get_text(col_child, newline_tag=True).replace("\n", "")
 
                     table_markdown += f"{tag_table_divider}"    # end of each column
 
@@ -255,7 +272,11 @@ class WikiCrawler:
             tag = PM.DataType.Tag.TABLE
             sentence = table_markdown.strip()
 
+
         ### Blockquote
+        # need to implement...
+        ###
+
 
         ### Code
         # <pre> 에 대한 처리
@@ -263,6 +284,44 @@ class WikiCrawler:
             tag = PM.DataType.Tag.CODE
             tag_str = f"{self._identifier.get('code')}"*3 + "\n"
             sentence = f"{tag_str}{source.get_text().strip()}{tag_str}".strip()
+
+
+        ### TODO 수식 처리
+        # 아래 중 특정 형태가 수식에 대해서 나오는지 확인
+        # <span class="mwe-math-element">
+        # ㄴ <span class="mwe-math-mathml-inline mwe-math-mathml-a11y">
+        # <img class="mwe-math-fallback-image-inline">
+        # <math> 태그 확인 https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mrow
+
+        ### text <p>
+        # <p> 태그 내부 요소들을 쪼개서 출력
+        # elif source.name == "p":
+        #     p_text = ""
+        #     for p_child in source.children:
+        #         ns = p_child.next_sibling
+
+        #         # case 1) 개행문자를 인위적으로 삽입한 경우
+        #         if p_child.name == "br":
+        #             p_text += "<br>"
+        #         # case 2) innerText 이후 다음 데이터와 구분을 위해 개행문자가 들어가 있는 경우
+        #         elif not p_child.name:    # innerText
+                    
+        #             if not p_child.get_text():    # empty context
+        #                 continue
+
+        #             if not ns:      # innerText == leaf node
+        #                 p_text += p_child.get_text().rstrip()
+        #             elif ns.name:   # innerText -> tag
+        #                 if ns.get_text().strip():
+        #                     p_text += p_child.get_text()
+        #             else:           # innerText -> innerText
+        #                 p_text += p_child.get_text()
+        #         # case 3) Tag 내부의 Text 추출
+        #         else:
+        #             p_text += self.get_text(p_child)
+
+        #     tag = PM.DataType.Tag.CONTEXT
+        #     sentence = p_text.strip()
 
         ### Others (~context, ~text)
         else:
@@ -325,3 +384,23 @@ class WikiCrawler:
 
         return passageList
 
+
+    def save_to_csv(self, passageList:list, filepath:str):
+        outputDataFrame = []  # set header
+
+        for passage in passageList:
+            try:    # type check
+                passage:PM.DataType.Passage = passage
+            except TypeError as te:
+                print(f"passage list is not composed of Passage object.[DETAIL]\n{te}")
+                exit(1)
+
+            keyword = passage.keyword or ""
+            title = passage.title or ""
+            contents = passage.contents or ""
+
+            outputDataFrame.append([keyword, title, contents])
+
+        storeDataFrame = pd.DataFrame(data=outputDataFrame, columns=["keyword", "title", "contents"])
+        storeDataFrame.to_csv(filepath)
+        

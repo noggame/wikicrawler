@@ -24,30 +24,32 @@ def make_passages_from_sentences(sentenceList:list):
 
     passageList = []
 
-    stackedPassage:DataType.Passage = DataType.Passage()
+    stackedSentence:DataType.Passage = DataType.Passage()
     keyword = ""
     
-    # Header1, Header2 기준으로 Passage 분리
+    # Header1, Header2 기준으로 Sentence를 합쳐 하나의 Passage로 구성
     for curSentence in sentenceList:
-        curSentence:DataType.Sentence = curSentence # type converting
+        curSentence:DataType.Sentence = curSentence
 
         # check Header
         if DataType.Tag.is_passage_header(curSentence.tag):
             # Key Header (문서의 시작 Header)
-            if not stackedPassage.title:
-                keyword = stackedPassage.title = curSentence.context
-                stackedPassage.keyword = keyword  # self keywording
+            if not stackedSentence.title:
+                keyword = stackedSentence.title = curSentence.context
+                stackedSentence.keyword = keyword  # self keywording
 
             # Sub Passage (Key Header 이후의 Header)
             else:
                 # 현재까지 정보 저장 후 초기화
-                passageList.append(stackedPassage)
-                stackedPassage = DataType.Passage(title=curSentence.context, keyword=keyword)
+                stackedSentence.contents = stackedSentence.contents.strip()
+                passageList.append(stackedSentence)
+                stackedSentence = DataType.Passage(title=curSentence.context, keyword=keyword)
         else:
-            stackedPassage.contents += "\n"+curSentence.context
+            stackedSentence.contents += curSentence.context
     else:
         # 마지막 Passage 추가
-        passageList.append(stackedPassage)
+        stackedSentence.contents = stackedSentence.contents.strip()
+        passageList.append(stackedSentence)
 
     return passageList
 

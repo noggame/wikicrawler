@@ -29,15 +29,6 @@ wikipedia (한국) 웹사이트에서 필요한 데이터를 정제해 사용하
     
 <br>
 
-# :warning: Issue
-
-알려진 이슈
-- 관련 검색어 없을 시 오류
-- 셀이 합병된 테이블 구분 불가
-- (math와 같은) 특수기호나 아래/위 첨자 등 일부 텍스트를 처리하지 못 함
-
-<br>
-
 # :bookmark: Updates & History
 
 [history.md](./history.md) 파일 참조

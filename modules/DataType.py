@@ -103,6 +103,7 @@ class Passage:
     - title : str = 제목
     - contents : str = 내용
     - keyword : str = 어떤 keyword 검색에서 추출된 passage인지 출처
+    - links : list<Link> = 참조하고 있는 연결 문서의 목록
     """
 
     def __init__(self, title:str="", contents:str="", keyword:str="", links:list=[]) -> None:

@@ -1,8 +1,15 @@
 
 # Patch 예정
+
 - 관련 데이터 링크정보 저장/관리 (연관검색 키워드로 사용 예정)
+- History 페이지 정보 추출 시 오류 확인/수정
 
 # Update 내역
+
+[09/18]
+- WikiCrawler Class를 환경설정과 각 기능으로 분리
+- Recursion 참조 오류 수정
+
 [09/18]
 - 전체 포맷에 대한 개행문자 처리 수정 (개행문자 삽입 단일화 구조로 수정)
 - Table, Description, Code 처리 수정

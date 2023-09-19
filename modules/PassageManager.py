@@ -25,7 +25,8 @@ def make_passages_from_sentences(sentenceList:list):
 
     passageList = []
 
-    stackedSentence:DataType.Passage = DataType.Passage()
+    stackedSentence:DataType.Passage = DataType.Passage(links=[])
+    # stackedSentence.__init__()
     keyword = ""
     
     # Header1, Header2 기준으로 Sentence를 합쳐 하나의 Passage로 구성

@@ -44,6 +44,11 @@ class Tag(Enum):
         return True if (tag == Tag.HEADER_1 or tag == Tag.HEADER_2) else False
     
 class Link:
+    """
+    keyword : 링크가 붙은 텍스트
+    
+    url : 링크
+    """
     def __init__(self, keyword:str="", url:str="") -> None:
         self.__keyword = keyword
         self.__url = url

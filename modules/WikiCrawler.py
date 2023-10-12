@@ -177,6 +177,9 @@ def get_links(source:BeautifulSoup) -> list:
         keyword = linkSource.get_text(strip=True)
         url = linkSource.get("href") or []
 
+        if any(x in url for x in ["intitle:", "%ED%8A%B9%EC%88%98:"]): # Exception case (intitle:, 특수:)
+            continue
+
         if keyword and url:
             linkObj = PM.DataType.Link(keyword=keyword, url=url)
             linkList.append(linkObj)
@@ -272,7 +275,7 @@ def get_sentence(source:BeautifulSoup, tag_marking:bool=True):
             if eachDesc.name in ["dt", "dd"]:
                 description += get_text(eachDesc)
             else:
-                description += get_text(description)
+                description += eachDesc
             # description += "\n"
 
         tag = PM.DataType.Tag.DESCRIPTION
@@ -356,7 +359,7 @@ def get_sentence(source:BeautifulSoup, tag_marking:bool=True):
     elif source.name == "pre":
         tag = PM.DataType.Tag.CODE
         tag_str = f"{CRAWLER_CONFIG._identifier.get('code')}"*3 + "\n"
-        context = f"{tag_str}{source.get_text().strip()}{tag_str}".strip()
+        context = f"{tag_str}{source.get_text()}{tag_str}"
         links = get_links(source=source)
 
         sentence = PM.DataType.Sentence(tag=tag, context=context, links=links)
